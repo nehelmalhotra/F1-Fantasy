@@ -1,0 +1,20 @@
+name: Refresh F1 Fantasy Data
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger backend refresh
+        run: |
+          curl -s -X POST \
+            "${{ secrets.BACKEND_URL }}/api/admin/refresh-all" \
+            -H "Content-Type: application/json" \
+            --max-time 300
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}

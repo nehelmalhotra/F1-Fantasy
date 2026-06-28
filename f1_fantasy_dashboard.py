@@ -25,8 +25,8 @@ import matplotlib.patches as mpatches
 
 
 # Your private league
-LEAGUE_ID = 5106507  # DRS Mafia
-LEAGUE_NAME = "DRS Mafia"
+LEAGUE_ID = 10328108
+LEAGUE_NAME = "The Masala Grid"
 NUM_RACES = 22
 
 # F1 Team Colors
