@@ -49,11 +49,23 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="F1 Fantasy API", version="1.0.0")
 
+# Comma-separated list of exact allowed origins (e.g. your custom domain).
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
+_allowed_origins = [o.strip() for o in FRONTEND_ORIGIN.split(",") if o.strip()]
+if "http://localhost:3000" not in _allowed_origins:
+    _allowed_origins.append("http://localhost:3000")
+
+# Also allow this project's Vercel domains (production aliases + preview deploys),
+# overridable via FRONTEND_ORIGIN_REGEX.
+_allowed_origin_regex = os.environ.get(
+    "FRONTEND_ORIGIN_REGEX",
+    r"https://f1-fantasy[\w-]*\.vercel\.app",
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN, "http://localhost:3000"],
+    allow_origins=_allowed_origins,
+    allow_origin_regex=_allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
