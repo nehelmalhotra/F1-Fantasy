@@ -11,10 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger backend refresh
-        run: |
-          curl -s -X POST \
-            "${{ secrets.BACKEND_URL }}/api/admin/refresh-all" \
-            -H "Content-Type: application/json" \
-            --max-time 300
+        shell: bash
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${BACKEND_URL:-}" ]]; then
+            echo "BACKEND_URL secret is missing"
+            exit 1
+          fi
+
+          url="${BACKEND_URL%/}/api/admin/refresh-all"
+          body_file="$(mktemp)"
+          trap 'rm -f "$body_file"' EXIT
+
+          http_code="$(curl -sS -o "$body_file" -w '%{http_code}' -X POST --max-time 300 "$url" -H 'Content-Type: application/json')"
+          cat "$body_file"
+          echo
+          echo "HTTP status: $http_code"
+
+          if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+            exit 1
+          fi
