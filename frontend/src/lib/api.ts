@@ -99,6 +99,13 @@ export const api = {
     );
   },
 
+  loginWithToken(token: string, league_id?: number) {
+    return apiFetch<{ user_id: number; f1_username: string; league_id: number }>(
+      "/api/auth/session-token",
+      { method: "POST", body: JSON.stringify({ token, league_id }) }
+    );
+  },
+
   me() {
     return apiFetch<User>("/api/auth/me");
   },
