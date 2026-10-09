@@ -18,6 +18,12 @@ import os
 import re
 import time
 from typing import Any
+
+try:
+    # Optional: automatic CAPTCHA solving via 2Captcha (needs CAPTCHA_API_KEY env var).
+    from captcha_solver import solve_captcha_if_present
+except ImportError:
+    solve_captcha_if_present = None
 from urllib.parse import quote
 
 import httpx
@@ -450,7 +456,7 @@ def _browser_login(
             _dismiss_consent(page)
 
             page.fill('input[name="Login"]', email)
-            page.fill('input[name="Password"]', password)
+            page.fill('input[name="Password"]', password); solve_captcha_if_present(page) if solve_captcha_if_present is not None else None  # Auto-solve CAPTCHA if present (needs CAPTCHA_API_KEY)
 
             # The submit button is disabled until the form validates; click the
             # form's submit button (not the header "Sign in" link).
@@ -483,7 +489,7 @@ def _browser_login(
                 raise F1AuthError(
                     "Signed in but could not capture the F1 session cookie. "
                     "This can happen if your account uses two-factor "
-                    "authentication or a CAPTCHA was shown. Please try again."
+                    "authentication or a CAPTCHA was shown and could not be solved automatically (set CAPTCHA_API_KEY on the backend). Please try again."
                 )
 
             guid = captured_guid or guid_from_jwt(token)
