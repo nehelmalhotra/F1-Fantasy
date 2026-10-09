@@ -1,0 +1,42 @@
+# render.yaml — Render Blueprint for the F1-Fantasy backend
+#
+# How to use:
+#   1. Put this file at the REPO ROOT of nehelmalhotra/F1-Fantasy (next to backend/).
+#      Easiest: on github.com, open the repo → Add file → Upload files → drop this in.
+#   2. Render dashboard → New → Blueprint → connect the F1-Fantasy repo.
+#   3. Render will prompt for the env vars marked `sync: false` below — fill in
+#      your F1 login (optional; you can also just log in via the frontend later,
+#      which stores the token the refresh job needs).
+#   4. Deploy. When it's live, copy the public URL
+#      (https://f1-fantasy-backend.onrender.com) and set it as the BACKEND_URL
+#      secret in the repo: Settings → Secrets and variables → Actions.
+#
+# Notes:
+#   - Free tier sleeps after 15 min idle. The GitHub cron wakes it with each
+#     refresh call, so that's fine — cold starts just take a few minutes.
+#   - The SQLite database lives on ephemeral disk: it resets on every redeploy.
+#     After a redeploy, log in once via the frontend so your F1 token is stored
+#     again (the refresh job scrapes using stored user tokens).
+#   - CORS: the backend already allows https://f1-fantasy*.vercel.app by default,
+#     so no FRONTEND_ORIGIN override is needed for the Vercel frontend.
+
+services:
+  - type: web
+    name: f1-fantasy-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/schedule
+    envVars:
+      - key: ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: F1_EMAIL
+        sync: false
+      - key: F1_PASSWORD
+        sync: false
+      - key: F1_LEAGUE_ID
+        value: "10328108"
