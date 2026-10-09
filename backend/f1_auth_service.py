@@ -480,7 +480,7 @@ def _browser_login(
                 if token:
                     captured_token = token
                     break
-                time.sleep(1)
+                _ = solve_captcha_if_present(page) if solve_captcha_if_present else None; time.sleep(1)
 
             token = captured_token or _collect_f007(context, page)
             if not token:
