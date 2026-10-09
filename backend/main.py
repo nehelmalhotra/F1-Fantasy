@@ -2,7 +2,8 @@
 FastAPI backend for F1 Fantasy Dashboard.
 
 Endpoints:
-  Auth:   POST /api/auth/f1-login, GET /api/auth/me, POST /api/auth/logout
+  Auth:   POST /api/auth/f1-login, POST /api/auth/session-token,
+          GET /api/auth/me, POST /api/auth/logout
   Data:   GET /api/league/{id}/standings, races, budget, chips, members
   Misc:   GET /api/schedule
 """
@@ -205,6 +206,44 @@ async def f1_login(body: LoginRequest, response: Response):
     return {
         "user_id": user_id,
         "f1_username": email.split("@")[0],
+        "league_id": league_id,
+        "token_expires_at": exp,
+    }
+
+
+class SessionTokenRequest(BaseModel):
+    token: str
+    league_id: int | None = None
+
+
+@app.post("/api/auth/session-token")
+async def auth_session_token(body: SessionTokenRequest, response: Response):
+    """Sign in with a manually copied F1_FANTASY_007 session cookie.
+
+    Reliable fallback when F1/Imperva shows a CAPTCHA to the automated login:
+    the user signs in to fantasy.formula1.com in their own browser (solving any
+    CAPTCHA themselves), copies the F1_FANTASY_007 cookie, and pastes it here.
+    We validate the JWT and store it exactly like a normal login — no browser
+    automation, no bot detection, no CAPTCHA roulette.
+    """
+    token = (body.token or "").strip().strip('"').strip("'")
+    if not token or "." not in token:
+        raise HTTPException(400, "That doesn't look like a session token. Copy the full F1_FANTASY_007 cookie value.")
+    guid = guid_from_jwt(token)
+    if not guid:
+        raise HTTPException(400, "Couldn't read your user ID from that token. It may be truncated or expired — copy a fresh one.")
+    exp = token_expiry(token) or (time.time() + 4 * 86400)
+    if exp < time.time():
+        raise HTTPException(400, "That token has expired. Sign in to fantasy.formula1.com again and copy a fresh cookie.")
+    league_id = body.league_id or DEFAULT_LEAGUE_ID
+    username = f"f1-{guid[:8]}"
+    user_id = upsert_user(guid, username, token, exp)
+    upsert_user_league(user_id, league_id)
+    _set_session(response, user_id)
+    asyncio.create_task(collect_league_data(guid, token, league_id))
+    return {
+        "user_id": user_id,
+        "f1_username": username,
         "league_id": league_id,
         "token_expires_at": exp,
     }
