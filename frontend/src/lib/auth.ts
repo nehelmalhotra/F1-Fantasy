@@ -15,6 +15,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, leagueId?: number) => Promise<void>;
+  loginWithToken: (token: string, leagueId?: number) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
   login: async () => {},
+  loginWithToken: async () => {},
   logout: async () => {},
   refresh: async () => {},
 });
@@ -54,6 +56,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refresh]
   );
 
+  const loginWithToken = useCallback(
+    async (token: string, leagueId?: number) => {
+      await api.loginWithToken(token, leagueId);
+      await refresh();
+    },
+    [refresh]
+  );
+
   const logout = useCallback(async () => {
     await api.logout();
     setUser(null);
@@ -61,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return createElement(
     AuthContext.Provider,
-    { value: { user, loading, login, logout, refresh } },
+    { value: { user, loading, login, loginWithToken, logout, refresh } },
     children
   );
 }
