@@ -1,3 +1,29 @@
+# refresh.yml — drop-in replacement for nehelmalhotra/F1-Fantasy/.github/workflows/refresh.yml
+#
+# Tuned for a Render free-tier backend (Oct 2026 migration off Railway).
+# Paste this over the existing file (or replace the `refresh` job), commit, and push.
+# Why each change:
+#   - runs-on pinned to ubuntu-24.04: ubuntu-latest is a moving target; pinning
+#     removes runner-image drift as a failure variable.
+#   - ::error:: annotations: failures become readable one-liners that say exactly
+#     which of the known causes fired (missing secret vs. backend unreachable vs.
+#     backend returned non-2xx).
+#   - --connect-timeout 30 / --max-time 600: Render free sleeps when idle, so the
+#     first request of a cycle cold-starts the container (1-3 min) and then the
+#     Playwright scrape itself takes minutes. The old 300s cap risked cutting a
+#     healthy-but-slow refresh short.
+#   - One retry after 30s: transient network blips between Actions and Render
+#     self-heal instead of leaving data stale for 6 hours.
+#   - Bonus: any commit resets GitHub's 60-day "scheduled workflow disabled"
+#     inactivity clock (warning email received 2026-10-03).
+#
+# The secret check is still on you: Settings → Secrets and variables → Actions →
+# BACKEND_URL must hold the live Render URL (e.g.
+# https://f1-fantasy-backend.onrender.com). After switching hosts, log in once
+# via the frontend so your F1 token is stored in the fresh database — the
+# refresh job scrapes using stored user tokens. Then re-run the workflow manually
+# (Actions → Refresh F1 Fantasy Data → Run workflow) and watch the annotations.
+
 name: Refresh F1 Fantasy Data
 
 on:
@@ -8,7 +34,7 @@ on:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Trigger backend refresh
         shell: bash
@@ -18,7 +44,7 @@ jobs:
           set -euo pipefail
 
           if [[ -z "${BACKEND_URL:-}" ]]; then
-            echo "BACKEND_URL secret is missing"
+            echo "::error::BACKEND_URL secret is missing. Set it in repo Settings → Secrets and variables → Actions."
             exit 1
           fi
 
@@ -26,11 +52,26 @@ jobs:
           body_file="$(mktemp)"
           trap 'rm -f "$body_file"' EXIT
 
-          http_code="$(curl -sS -o "$body_file" -w '%{http_code}' -X POST --max-time 300 "$url" -H 'Content-Type: application/json')"
-          cat "$body_file"
-          echo
-          echo "HTTP status: $http_code"
+          attempt=1
+          while [[ $attempt -le 2 ]]; do
+            echo "Attempt ${attempt}: POST ${url}"
+            if http_code="$(curl -sS -o "$body_file" -w '%{http_code}' -X POST \
+                --connect-timeout 30 --max-time 600 "$url" \
+                -H 'Content-Type: application/json')"; then
+              cat "$body_file"
+              echo
+              echo "HTTP status: ${http_code}"
+              if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
+                echo "Refresh succeeded."
+                exit 0
+              fi
+              echo "::error::Backend responded with HTTP ${http_code} (attempt ${attempt})."
+            else
+              echo "::error::Could not reach the backend (attempt ${attempt}). Is the Render service up and the BACKEND_URL correct?"
+            fi
+            attempt=$((attempt + 1))
+            [[ $attempt -le 2 ]] && sleep 30
+          done
 
-          if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
-            exit 1
-          fi
+          echo "::error::Refresh failed after 2 attempts."
+          exit 1
